@@ -1065,6 +1065,7 @@ static int kgsl_alloc_secure_pages(struct kgsl_device *device,
 	sgt = kzalloc(sizeof(*sgt), GFP_KERNEL);
 	if (!sgt) {
 		kgsl_pool_free_pages(pages, count);
+		kvfree(pages);
 		return -ENOMEM;
 	}
 
@@ -1072,6 +1073,7 @@ static int kgsl_alloc_secure_pages(struct kgsl_device *device,
 	if (ret) {
 		kfree(sgt);
 		kgsl_pool_free_pages(pages, count);
+		kvfree(pages);
 		return ret;
 	}
 
