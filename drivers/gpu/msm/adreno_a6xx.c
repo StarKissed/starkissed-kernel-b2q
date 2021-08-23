@@ -255,6 +255,9 @@ bool a6xx_cx_regulator_disable_wait(struct regulator *reg,
 
 	regulator_disable(reg);
 
+	if (IS_ENABLED(CONFIG_ARM_SMMU_POWER_ALWAYS_ON))
+		return true;
+
 	for (;;) {
 		gmu_core_regread(device, A6XX_GPU_CC_CX_GDSCR, &val);
 
