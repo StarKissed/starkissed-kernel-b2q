@@ -10,6 +10,10 @@
 
 HOST_EXTRACFLAGS += -I$(srctree)/tools/include
 
+ifeq ($(shell uname),Darwin)
+HOST_EXTRACFLAGS += -I/usr/local/opt/openssl@1.1/include -L/usr/local/opt/openssl@1.1/lib
+endif
+
 hostprogs-$(CONFIG_BUILD_BIN2C)  += bin2c
 hostprogs-$(CONFIG_KALLSYMS)     += kallsyms
 hostprogs-$(CONFIG_LOGO)         += pnmtologo
