@@ -23,7 +23,10 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/sec_debug.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpragma-pack"
 #include <linux/perflog.h>
+#pragma clang diagnostic pop
 #if !defined(KPERFMON_KMALLOC)
 #include <linux/vmalloc.h>
 #endif

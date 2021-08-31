@@ -250,7 +250,10 @@ bool is_certificate_relevant_to_task(
 	const char system_server_app_name[] = "/system/framework/services.jar";
 	const char system_server[] = "system_server";
 	const size_t max_app_name = 1024;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wvla-extension"
 	char cmdline[max_app_name + 1];
+#pragma clang diagnostic pop
 	int cmdline_size;
 
 	if (!(parsed_cert->flags & (1 << PaFlagBits_bitAndroid)))

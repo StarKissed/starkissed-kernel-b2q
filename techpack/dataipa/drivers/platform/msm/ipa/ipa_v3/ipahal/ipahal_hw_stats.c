@@ -225,7 +225,10 @@ static struct ipahal_stats_init_pyld *ipahal_generate_init_pyld_flt_rt_v4_5(
 	void *params, bool is_atomic_ctx)
 {
 	struct ipahal_stats_init_pyld *pyld;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wvoid-pointer-to-int-cast"
 	int num = (int)(params);
+#pragma clang diagnostic pop
 
 	if (num > IPA_MAX_FLT_RT_CNT_INDEX ||
 		num <= 0) {
