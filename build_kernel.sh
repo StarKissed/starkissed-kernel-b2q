@@ -96,7 +96,9 @@ if [ -f out/arch/arm64/boot/Image ]; then
     fi
     find out -type f -name "*.ko" -exec cp -Rf "{}" release/modules/system/vendor/lib/modules/ \;
     
+    HASH=$(git rev-parse --short HEAD)
+    
     cd release
-    zip -r9 "starkissed-kernel-b2q.zip" * -x *.DS_Store .git* README.md
+    zip -r9 "starkissed-b2q-$HASH.zip" * -x *.DS_Store .git* README.md
     cd ../
 fi
