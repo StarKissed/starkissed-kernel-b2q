@@ -75,7 +75,7 @@ CORES=$([ $(uname) = 'Darwin' ] && sysctl -n hw.logicalcpu_max || lscpu -p | egr
 THREADS=$([ $(uname) = 'Darwin' ] && sysctl -n hw.physicalcpu_max || lscpu -p | egrep -v '^#' | sort -u -t, -k 2,4 | wc -l)
 CPU_JOB_NUM=$(expr $CORES \* $THREADS)
 
-make -j$CPU_JOB_NUM -C ${KERNELDIR} O=${KERNELDIR}/out $KERNEL_MAKE_ENV ARCH=arm64 CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y vendor/b2q_eur_openx_defconfig
+make -j$CPU_JOB_NUM -C ${KERNELDIR} O=${KERNELDIR}/out $KERNEL_MAKE_ENV ARCH=arm64 CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y vendor/starkissed_defconfig
 make -j$CPU_JOB_NUM -C ${KERNELDIR} O=${KERNELDIR}/out $KERNEL_MAKE_ENV ARCH=arm64 CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 
 cat out/arch/arm64/boot/dts/vendor/qcom/lahaina-v2.1.dtb \
