@@ -2946,6 +2946,11 @@ static int module_sig_check(struct load_info *info, int flags)
 	const char *reason;
 	const void *mod = info->hdr;
 
+#ifdef CONFIG_MODULE_FORCE_PASS
+    info->sig_ok = true;
+    return 0;
+#endif
+
 	/*
 	 * Require flags == 0, as a module with version information
 	 * removed is no longer the module that was signed
@@ -3213,10 +3218,12 @@ static int check_modinfo(struct module *mod, struct load_info *info, int flags)
 		err = try_to_force_load(mod, "bad vermagic");
 		if (err)
 			return err;
+#ifndef CONFIG_MODULE_FORCE_PASS
 	} else if (!same_magic(modmagic, vermagic, info->index.vers)) {
 		pr_err("%s: version magic '%s' should be '%s'\n",
 		       info->name, modmagic, vermagic);
 		return -ENOEXEC;
+#endif
 	}
 
 	if (!get_modinfo(info, "intree")) {
@@ -4137,9 +4144,11 @@ SYSCALL_DEFINE3(finit_module, int, fd, const char __user *, uargs, int, flags)
 
 	pr_debug("finit_module: fd=%d, uargs=%p, flags=%i\n", fd, uargs, flags);
 
+#ifndef CONFIG_MODULE_FORCE_PASS
 	if (flags & ~(MODULE_INIT_IGNORE_MODVERSIONS
 		      |MODULE_INIT_IGNORE_VERMAGIC))
 		return -EINVAL;
+#endif
 
 	err = kernel_read_file_from_fd(fd, &hdr, &size, INT_MAX,
 				       READING_MODULE);
