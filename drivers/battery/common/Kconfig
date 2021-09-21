@@ -1,7 +1,7 @@
-config DUAL_BATTERY
-    tristate "support for dual battery model"
-    help
-	  Say Y here to enable support for dual battery
+# config DUAL_BATTERY
+#     tristate "support for dual battery model"
+#     help
+# 	  Say Y here to enable support for dual battery
 
 config DUAL_BATTERY_CELL_SENSING
     bool "DUAL BATTERY CELLSENSING support"
