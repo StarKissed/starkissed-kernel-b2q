@@ -1,7 +1,7 @@
 #!/bin/bash
 
-export ARCH=arm64
-export PRODUCT_NAME=b2q
+export PRODUCT_NAME="b2q"
+export TARGET_BUILD_VARIANT="user"
 
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')-x86
 if [ $PLATFORM == "darwin-x86" ]; then
@@ -15,17 +15,18 @@ if [ $PLATFORM == "darwin-x86" ]; then
     export PKG_CONFIG_PATH=/"usr/local/opt/openssl@1.1/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     BUILDROOT=/Volumes/Android
-    KERNELDIR=$BUILDROOT/starkissed-kernel-b2q
     PREBUILT=$BUILDROOT/$PLATFORM/toolchains
     CLANGVER=clang-r416183d
+    CC_BIN=${PREBUILT}/aarch64-linux-android-4.9/bin
+    CCC_BIN=${PREBUILT}/arm-linux-androideabi-4.9/bin
 else
     BUILDROOT=/mnt/hgfs/Android
-    KERNELDIR=$BUILDROOT/starkissed-kernel-b2q
     PREBUILT=$BUILDROOT/$PLATFORM/toolchains
     CLANGVER=clang-r416183d
 fi
+CLANG_BIN=${PREBUILT}/$PLATFORM/$CLANGVER/bin
 
-cd $KERNELDIR
+cd $BUILDROOT/starkissed-kernel-b2q
 
 echo
 echo "Clean Repository"
@@ -60,23 +61,48 @@ fi
 #find "release" -name "*.zip" -type f -delete
 
 echo
-echo "Compile Source"
+echo "Configure Build"
 echo
 
 mkdir -p out
 mkdir -p release/modules/system/vendor/lib/modules
 
-BUILD_CROSS_COMPILE=${PREBUILT}/aarch64-linux-android-4.9/bin/aarch64-linux-android-
-KERNEL_LLVM_BIN=${PREBUILT}/$PLATFORM/$CLANGVER/bin/clang
-CLANG_TRIPLE=aarch64-linux-gnu-
-KERNEL_MAKE_ENV="DTC_EXT=${PREBUILT}/prebuilts-master/dtc CONFIG_BUILD_ARM64_DT_OVERLAY=y"
+if [ $PLATFORM == "darwin-x86" ]; then
+    export PATH=${CLANG_BIN}:${CC_BIN}:${CCC_BIN}:${PATH}
+    export LD_LIBRARY_PATH=${PREBUILT}/$PLATFORM/$CLANGVER/lib64:$LD_LIBRARY_PATH
+    export CLANG_TRIPLE=aarch64-linux-gnu-
+    export CROSS_COMPILE=aarch64-linux-android-
+    export CROSS_COMPILE_COMPAT=arm-linux-androideabi-
+    #export DTC_EXT=${PREBUILT}/prebuilts-master/dtc
+else
+    export PATH=${CLANG_BIN}:${PATH}
+    export CROSS_COMPILE=aarch64-linux-gnu-
+    export CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
+fi
+
+echo
+echo "Set DEFCONFIG"
+echo
+
+if [ $PLATFORM == "darwin-x86" ]; then
+    make LLVM=1 vendor/starkissed_defconfig
+else
+    make -C ${KERNELDIR} CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y vendor/starkissed_defconfig
+fi
+
+echo
+echo "Compile Source"
+echo
 
 CORES=$([ $(uname) = 'Darwin' ] && sysctl -n hw.logicalcpu_max || lscpu -p | egrep -v '^#' | wc -l)
 THREADS=$([ $(uname) = 'Darwin' ] && sysctl -n hw.physicalcpu_max || lscpu -p | egrep -v '^#' | sort -u -t, -k 2,4 | wc -l)
 CPU_JOB_NUM=$(expr $CORES \* $THREADS)
 
-make -j$CPU_JOB_NUM -C ${KERNELDIR} O=${KERNELDIR}/out $KERNEL_MAKE_ENV ARCH=arm64 CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y vendor/starkissed_defconfig
-make -j$CPU_JOB_NUM -C ${KERNELDIR} O=${KERNELDIR}/out $KERNEL_MAKE_ENV ARCH=arm64 CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+if [ $PLATFORM == "darwin-x86" ]; then
+    make LLVM=1 -j$CPU_JOB_NUM
+else
+    make -j$CPU_JOB_NUM -C ${KERNELDIR} CROSS_COMPILE=$BUILD_CROSS_COMPILE REAL_CC=$KERNEL_LLVM_BIN CLANG_TRIPLE=$CLANG_TRIPLE CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+fi
 
 cat out/arch/arm64/boot/dts/vendor/qcom/lahaina-v2.1.dtb \
     out/arch/arm64/boot/dts/vendor/qcom/lahaina-v2.dtb \
