@@ -18,6 +18,7 @@
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/cpufreq.h>
+#include <linux/percpu-defs.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/rwsem.h>
@@ -188,12 +189,12 @@ struct umbrella_core_tunables {
 		* Devices that support powersuspend will also consider current
 		* screen state in determining the maximum frequency values.
 	  */
-#define DEFAULT_INACTIVE_FREQ_ON_MIN		1612800
-#define DEFAULT_INACTIVE_FREQ_ON_MID		1670400
-#define DEFAULT_INACTIVE_FREQ_ON_MAX		1670400
-#define DEFAULT_INACTIVE_FREQ_OFF_MIN		806400
-#define DEFAULT_INACTIVE_FREQ_OFF_MID 	844800
-#define DEFAULT_INACTIVE_FREQ_OFF_MAX 	844800
+#define DEFAULT_INACTIVE_FREQ_ON_MIN		806400
+#define DEFAULT_INACTIVE_FREQ_ON_MID		1324800
+#define DEFAULT_INACTIVE_FREQ_ON_MAX		1420800
+#define DEFAULT_INACTIVE_FREQ_OFF_MIN		595200
+#define DEFAULT_INACTIVE_FREQ_OFF_MID		1075200
+#define DEFAULT_INACTIVE_FREQ_OFF_MAX		1190400
 #ifdef CONFIG_POWERSUSPEND
 	unsigned int max_inactive_freq_screen_on;
 	unsigned int max_inactive_freq_screen_off;
@@ -228,7 +229,7 @@ struct cpufreq_loadinfo {
 
 static spinlock_t mode_lock;
 
-#define DEFAULT_TARGET_LOAD 90
+#define DEFAULT_TARGET_LOAD 80
 static unsigned int default_target_loads[] = {
   DEFAULT_TARGET_LOAD
 };
@@ -660,7 +661,8 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
 	unsigned int delta_time;
 	u64 cputime_speedadj;
 	int cpu_load;
-	struct umbrella_core_cpuinfo *pcpu = &per_cpu(umbrella_core_cpuinfo, data);
+  int cpu = smp_processor_id();
+	struct umbrella_core_cpuinfo *pcpu = &per_cpu(umbrella_core_cpuinfo, cpu);
   struct umbrella_core_tunables *tunables = pcpu->ipolicy->tunables;
 	unsigned int new_freq;
 	unsigned int loadadjfreq;
@@ -681,7 +683,7 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
 
 	pcpu->nr_timer_resched = 0;
 	spin_lock_irqsave(&pcpu->load_lock, flags);
-	now = update_load(data);
+	now = update_load(cpu);
 	delta_time = (unsigned int)(now - pcpu->cputime_speedadj_timestamp);
 	cputime_speedadj = pcpu->cputime_speedadj;
 	spin_unlock_irqrestore(&pcpu->load_lock, flags);
@@ -694,7 +696,7 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
 	if (enforced_mode)
 		new_mode = enforced_mode;
 	else
-		new_mode = check_mode(data, uc_mode, now);
+		new_mode = check_mode(cpu, uc_mode, now);
 	if (new_mode != uc_mode) {
 		uc_mode = new_mode;
 		if (new_mode & MULTI_MODE || new_mode & SINGLE_MODE) {
@@ -744,7 +746,7 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
 			for_each_online_cpu(i) {
 				picpu = &per_cpu(umbrella_core_cpuinfo, i);
 
-				if (i == data || picpu->prev_load <
+				if (i == cpu || picpu->prev_load <
 						tunables->up_threshold_any_cpu_load)
 					continue;
 
@@ -763,7 +765,7 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
 	    now - pcpu->hispeed_validate_time <
 	    freq_to_above_hispeed_delay(tunables, pcpu->target_freq)) {
 		trace_cpufreq_umbrella_core_notyet(
-			data, cpu_load, pcpu->target_freq,
+			cpu, cpu_load, pcpu->target_freq,
 			pcpu->policy->cur, new_freq);
 		goto rearm;
 	}
@@ -796,7 +798,7 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
 	if (new_freq < pcpu->floor_freq) {
 		if (now - pcpu->floor_validate_time < mod_min_sample_time) {
 			trace_cpufreq_umbrella_core_notyet(
-				data, cpu_load, pcpu->target_freq,
+				cpu, cpu_load, pcpu->target_freq,
 				pcpu->policy->cur, new_freq);
 			goto rearm;
 		}
@@ -818,17 +820,17 @@ static void cpufreq_umbrella_core_timer(struct timer_list *timers)
     if (pcpu->target_freq == new_freq &&
         pcpu->target_freq <= pcpu->policy->cur) {
 		trace_cpufreq_umbrella_core_already(
-			data, cpu_load, pcpu->target_freq,
+			cpu, cpu_load, pcpu->target_freq,
 			pcpu->policy->cur, new_freq);
 		goto rearm_if_notmax;
 	}
 
-	trace_cpufreq_umbrella_core_target(data, cpu_load, pcpu->target_freq,
+	trace_cpufreq_umbrella_core_target(cpu, cpu_load, pcpu->target_freq,
 					 pcpu->policy->cur, new_freq);
 
 	pcpu->target_freq = new_freq;
 	spin_lock_irqsave(&speedchange_cpumask_lock, flags);
-	cpumask_set_cpu(data, &speedchange_cpumask);
+	cpumask_set_cpu(cpu, &speedchange_cpumask);
 	spin_unlock_irqrestore(&speedchange_cpumask_lock, flags);
 	wake_up_process(speedchange_task);
 
@@ -1526,12 +1528,12 @@ show_one(io_is_busy, "%u");
 gov_attr_rw(io_is_busy);
 
 #ifdef CONFIG_UC_MODE_AUTO_CHANGE_BOOST
-static ssize_t show_bimc_hispeed_freq(struct gov_attr_set *attr_set, char *buf)
+static ssize_t show_bimc_hispeed_freq_attr(struct gov_attr_set *attr_set, char *buf)
 {
   return sprintf(buf, "%lu\n", bimc_hispeed_freq);
 }
 
-static ssize_t store_bimc_hispeed_freq(struct gov_attr_set *attr_set,
+static ssize_t store_bimc_hispeed_freq_attr(struct gov_attr_set *attr_set,
 				  const char *buf, size_t count)
 {
 	int ret;
@@ -1546,7 +1548,7 @@ static ssize_t store_bimc_hispeed_freq(struct gov_attr_set *attr_set,
 	return count;
 }
 
-gov_attr_rw(bimc_hispeed_freq);
+gov_attr_rw(bimc_hispeed_freq_attr);
 #endif	// CONFIG_UC_MODE_AUTO_CHANGE_BOOST
 
 static ssize_t store_sync_freq(struct gov_attr_set *attr_set,
@@ -1789,7 +1791,7 @@ static struct attribute *umbrella_core_attributes[] = {
 	&single_exit_time_attr.attr,
 #endif
 #ifdef CONFIG_UC_MODE_AUTO_CHANGE_BOOST
-	&bimc_hispeed_freq.attr,
+	&bimc_hispeed_freq_attr.attr,
 #endif
 #ifdef CONFIG_POWERSUSPEND
     &max_inactive_freq_screen_on.attr,
@@ -2059,8 +2061,7 @@ int cpufreq_umbrella_core_start(struct cpufreq_policy *policy)
 
   mutex_lock(&gov_lock);
 
-  freq_table =
-    cpufreq_frequency_get_table(policy->cpu);
+  freq_table = cpufreq_frequency_get_table(policy->cpu);
   if (!tunables->hispeed_freq)
     tunables->hispeed_freq = policy->max;
   #ifdef CONFIG_UC_MODE_AUTO_CHANGE
@@ -2120,7 +2121,7 @@ void cpufreq_umbrella_core_stop(struct cpufreq_policy *policy)
 
   if (--active_count > 0) {
     mutex_unlock(&gov_lock);
-    return 0;
+    return;
   }
 
   cpufreq_unregister_notifier(
@@ -2241,21 +2242,28 @@ static struct power_suspend cpufreq_umbrella_core_power_suspend_info = {
 };
 #endif
 
-static void cpufreq_umbrella_core_nop_timer(unsigned long data)
+static void cpufreq_umbrella_core_nop_timer(struct timer_list *timers)
 {
+	/*
+	 * The purpose of slack-timer is to wake up the CPU from IDLE, in order
+	 * to decrease its frequency if it is not set to minimum already.
+	 *
+	 * This is important for platforms where CPU with higher frequencies
+	 * consume higher power even at IDLE.
+	 */
 }
 
 static int __init cpufreq_umbrella_core_gov_init(void)
 {
 	unsigned int i;
 	struct umbrella_core_cpuinfo *pcpu;
-	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
 
 	/* Initalize per-cpu timers */
 	for_each_possible_cpu(i) {
 		pcpu = &per_cpu(umbrella_core_cpuinfo, i);
     timer_setup(&pcpu->cpu_timer, cpufreq_umbrella_core_timer, TIMER_DEFERRABLE);
-		timer_setup(&pcpu->cpu_slack_timer, cpufreq_umbrella_core_nop_timer, 0UL);
+    timer_setup(&pcpu->cpu_slack_timer, cpufreq_umbrella_core_nop_timer, 0UL);
 		spin_lock_init(&pcpu->load_lock);
 		init_rwsem(&pcpu->enable_sem);
 	}
@@ -2294,6 +2302,11 @@ struct cpufreq_governor *cpufreq_default_governor(void)
 	return CPU_FREQ_GOV_UMBRELLA_CORE;
 }
 
+fs_initcall(cpufreq_umbrella_core_gov_init);
+#else
+module_init(cpufreq_umbrella_core_gov_init);
+#endif
+
 #ifdef CONFIG_UC_MODE_AUTO_CHANGE_BOOST
 static void mode_auto_change_boost(struct work_struct *work)
 {
@@ -2307,12 +2320,6 @@ static void mode_auto_change_boost(struct work_struct *work)
 	}
 }
 #endif	// CONFIG_UC_MODE_AUTO_CHANGE_BOOST
-
-#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_UMBRELLA_CORE
-fs_initcall(cpufreq_umbrella_core_gov_init);
-#else
-module_init(cpufreq_umbrella_core_gov_init);
-#endif
 
 static void __exit cpufreq_umbrella_core_gov_exit(void)
 {
