@@ -745,7 +745,7 @@ out:
 	kfree(t);
 
 // [ SEC_SELINUX_PORTING_COMMON
-#ifdef CONFIG_ALWAYS_ENFORCE
+#ifdef CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE
     	selinux_enforcing = 1;
 #endif
 	
