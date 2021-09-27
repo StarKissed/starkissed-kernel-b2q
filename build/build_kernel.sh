@@ -44,6 +44,9 @@ fi
 if [ -f "release/dtb" ]; then
     rm release/dtb;
 fi
+if [ -f "release/dtbo.img" ]; then
+    rm release/dtbo.img;
+fi
 if [ -f "release/Image.gz" ]; then
     rm release/Image.gz
 fi
@@ -115,6 +118,9 @@ echo
 
 if [ -f out/arch/arm64/boot/Image ]; then
     cp -f out/arch/arm64/boot/dtb release/
+    if [ -f out/arch/arm64/boot/dtbo.img ]; then
+        cp -f out/arch/arm64/boot/dtbo.img release/
+    fi
     if [ -f out/arch/arm64/boot/Image.gz ]; then
         cp -f out/arch/arm64/boot/Image.gz release/
     else
