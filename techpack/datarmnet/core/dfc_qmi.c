@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,6 +18,8 @@
 
 #define CREATE_TRACE_POINTS
 #include "dfc.h"
+
+#include <linux/ipc_logging.h>
 
 struct dfc_qmap_header {
 	u8  pad_len:6;
@@ -923,18 +925,19 @@ int dfc_bearer_flow_ctl(struct net_device *dev,
 
 	enable = bearer->grant_size ? true : false;
 
-	/* Do not flow disable tcp ack q in tcp bidir
-	 * ACK queue opened first to drain ACKs faster
-	 * Although since tcp ancillary is true most of the time,
-	 * this shouldn't really make a difference
-	 * If there is non zero grant but tcp ancillary is false,
-	 * send out ACKs anyway
-	 */
-	if (bearer->ack_mq_idx != INVALID_MQ)
-		qmi_rmnet_flow_control(dev, bearer->ack_mq_idx,
-				       enable || bearer->tcp_bidir);
-
+	net_log("m=%d b=%u q=%d gr=%u mq %s",
+		qos->mux_id, bearer->bearer_id, bearer->mq_idx, bearer->grant_size,
+		enable ? "en" : "dis");
 	qmi_rmnet_flow_control(dev, bearer->mq_idx, enable);
+
+	/* Do not flow disable tcp ack q in tcp bidir */
+	if (bearer->ack_mq_idx != INVALID_MQ &&
+	    (enable || !bearer->tcp_bidir)) {
+		net_log("m=%d b=%u gr=%u ack_mq_idx %s",
+			qos->mux_id, bearer->bearer_id, bearer->grant_size,
+			enable ? "en" : "dis");
+		qmi_rmnet_flow_control(dev, bearer->ack_mq_idx, enable);
+		}
 
 	if (!enable && bearer->ack_req)
 		dfc_send_ack(dev, bearer->bearer_id,
@@ -1028,12 +1031,8 @@ static int dfc_update_fc_map(struct net_device *dev, struct qos_info *qos,
 			itm->bytes_in_flight = 0;
 		}
 
-		/* update queue state only if there is a change in grant
-		 * or change in ancillary tcp state
-		 */
 		if ((itm->grant_size == 0 && adjusted_grant > 0) ||
-		    (itm->grant_size > 0 && adjusted_grant == 0) ||
-		    (itm->tcp_bidir ^ DFC_IS_TCP_BIDIR(ancillary)))
+		    (itm->grant_size > 0 && adjusted_grant == 0))
 			action = true;
 
 		/* This is needed by qmap */
@@ -1064,8 +1063,13 @@ static int dfc_update_fc_map(struct net_device *dev, struct qos_info *qos,
 		itm->last_seq = fc_info->seq_num;
 		itm->last_adjusted_grant = adjusted_grant;
 
-		if (action)
+		if (action) {
+			net_log("I> m=%d b=%d gr=%d agr=%d s=%d a=%d\n",
+				fc_info->mux_id, fc_info->bearer_id,
+				fc_info->num_bytes, itm->grant_size, fc_info->seq_num,
+				ancillary);
 			rc = dfc_bearer_flow_ctl(dev, itm, qos);
+		}
 	}
 
 	return rc;
@@ -1124,9 +1128,14 @@ void dfc_do_burst_flow_control(struct dfc_qmi_data *dfc,
 			continue;
 		}
 
-		if (unlikely(flow_status->bearer_id == 0xFF))
+		if (unlikely(flow_status->bearer_id == 0xFF)) {
+			net_log("I> m=%d b=%d gr=%d s=%d a=%d\n",
+				flow_status->mux_id, flow_status->bearer_id,
+				flow_status->num_bytes, flow_status->seq_num,
+				ancillary);	
 			dfc_all_bearer_flow_ctl(
 				dev, qos, ack_req, ancillary, flow_status);
+		}
 		else
 			dfc_update_fc_map(
 				dev, qos, ack_req, ancillary, flow_status,
@@ -1152,7 +1161,10 @@ static void dfc_update_tx_link_status(struct net_device *dev,
 	/* If no change in tx status, ignore */
 	if (itm->tx_off == !tx_status)
 		return;
-
+	
+	net_log("Link> %s, b=%d, gr=%d, rs=%d, status %d\n", dev->name,
+		binfo->bearer_id, itm->grant_size, itm->rat_switch, tx_status);
+	
 	if (itm->grant_size && !tx_status) {
 		itm->grant_size = 0;
 		itm->tcp_bidir = false;
